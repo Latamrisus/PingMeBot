@@ -22,6 +22,12 @@
         <ul>
             {% for task in tasks_pending %}
             <li class="task-card">
+                <a href="/web/tasks/{{ task.id }}/edit"
+                   class="edit-btn"
+                   title="Редактировать задачу">
+                    ✎
+                </a>
+
                 <form
                         action="/web/tasks/{{ task.id }}/delete"
                         method="post"
@@ -38,7 +44,9 @@
                 <div class="desc">{{ task.description }}</div>
                 {% endif %}
                 {% if task.due_at %}
-                <div class="meta">Дедлайн: {{ task.due_at }}</div>
+                <div class="meta {% if task.due_at < now %}overdue{% endif %}">
+                    Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/start" method="post" style="display:inline">
                     <button type="submit">Взять в работу</button>
@@ -61,6 +69,12 @@
         <ul>
             {% for task in tasks_in_progress %}
             <li class="task-card">
+                <a href="/web/tasks/{{ task.id }}/edit"
+                   class="edit-btn"
+                   title="Редактировать задачу">
+                    ✎
+                </a>
+
                 <form
                         action="/web/tasks/{{ task.id }}/delete"
                         method="post"
@@ -77,7 +91,9 @@
                 <div class="desc">{{ task.description }}</div>
                 {% endif %}
                 {% if task.due_at %}
-                <div class="meta">Дедлайн: {{ task.due_at }}</div>
+                <div class="meta {% if task.due_at < now %}overdue{% endif %}">
+                    Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
                     <button type="submit">Сделано</button>
@@ -97,6 +113,12 @@
         <ul>
             {% for task in tasks_done %}
             <li class="task-card">
+                <a href="/web/tasks/{{ task.id }}/edit"
+                   class="edit-btn"
+                   title="Редактировать задачу">
+                    ✎
+                </a>
+
                 <form
                         action="/web/tasks/{{ task.id }}/delete"
                         method="post"
@@ -112,7 +134,9 @@
                 <div class="desc">{{ task.description }}</div>
                 {% endif %}
                 {% if task.due_at %}
-                <div class="meta">Дедлайн: {{ task.due_at }}</div>
+                <div class="meta {% if task.due_at < now %}overdue{% endif %}">
+                    Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                </div>
                 {% endif %}
             </li>
             {% endfor %}

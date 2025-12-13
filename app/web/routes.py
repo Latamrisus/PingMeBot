@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request, Form, status, HTTPException
+from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi.responses import RedirectResponse
@@ -28,6 +28,8 @@ async def tasks_page(
     result = await db.execute(stmt)
     tasks = result.scalars().all()
 
+    now = datetime.utcnow()
+
     tasks_pending = [t for t in tasks if t.status == TaskStatus.pending]
     tasks_in_progress = [t for t in tasks if t.status == TaskStatus.in_progress]
     tasks_done = [t for t in tasks if t.status == TaskStatus.done]
@@ -38,7 +40,8 @@ async def tasks_page(
             "request": request,
             "tasks_pending": tasks_pending,
             "tasks_in_progress": tasks_in_progress,
-            "tasks_done": tasks_done
+            "tasks_done": tasks_done,
+            "now": now
         }
     )
 
@@ -61,13 +64,13 @@ async def create_task_page(
     task = Task(title=title, description=description, due_at=due_at_dt)
     db.add(task)
     await db.commit()
-    return RedirectResponse(url="/web/tasks", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url="/web/tasks", status_code=303)
 
 
 @router.post("/web/tasks/{task_id}/start", include_in_schema=False)
 async def task_in_progress(
-    task_id: int,
-    db: AsyncSession = Depends(get_db)
+        task_id: int,
+        db: AsyncSession = Depends(get_db)
 ):
     task = await db.get(Task, task_id)
     if not task:
@@ -80,8 +83,8 @@ async def task_in_progress(
 
 @router.post("/web/tasks/{task_id}/done", include_in_schema=False)
 async def task_done(
-    task_id: int,
-    db: AsyncSession = Depends(get_db)
+        task_id: int,
+        db: AsyncSession = Depends(get_db)
 ):
     task = await db.get(Task, task_id)
     if not task:
@@ -108,5 +111,56 @@ async def task_done_delete(
     #     )
 
     await db.delete(task)
+    await db.commit()
+    return RedirectResponse(url="/web/tasks", status_code=303)
+
+
+@router.get("/web/tasks/{task_id}/edit", include_in_schema=False)
+async def edit_task_page(
+        task_id: int,
+        request: Request,
+        db: AsyncSession = Depends(get_db)
+):
+    task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return templates.TemplateResponse(
+        "task_edit.html",
+        {"request": request, "task": task},
+    )
+
+
+@router.post("/web/tasks/{task_id}/edit", include_in_schema=False)
+async def update_task_page(
+        task_id: int,
+        request: Request,
+        title: str = Form(...),
+        description: str = Form(""),
+        due_at: str | None = Form(None),
+        status: str | None = Form(None),
+        db: AsyncSession = Depends(get_db)
+):
+    task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.title = title
+    task.description = description or None
+
+    if due_at:
+        try:
+            task.due_at = datetime.fromisoformat(due_at)
+        except ValueError:
+            task.due_at = None
+    else:
+        task.due_at = None
+
+    if status:
+        try:
+            task.status = TaskStatus(status)
+        except ValueError:
+            pass
+
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)
