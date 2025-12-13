@@ -28,6 +28,12 @@ async def create_task(
             detail="due_at must be in the future"
         )
 
+    if payload.remind_at and payload.remind_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="remind_at must be in the future"
+        )
+
     if payload.due_at and payload.remind_at and payload.remind_at > payload.due_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,6 +83,29 @@ async def update_task(task_id: int, payload: TaskUpdate, db: AsyncSession = Depe
         )
 
     data = payload.model_dump(exclude_unset=True)
+
+    now = datetime.now(timezone.utc)
+    due_at = data.get("due_at", task.due_at)
+    remind_at = data.get("remind_at", task.remind_at)
+
+    if due_at and due_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="due_at must be in the future",
+        )
+
+    if remind_at and remind_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="remind_at must be in the future",
+        )
+
+    if remind_at and due_at and remind_at > due_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="remind_at must be <= due_at",
+        )
+
     for field, value in data.items():
         setattr(task, field, value)
 
