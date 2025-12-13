@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Мои задачи — PingMeBot{% endblock %}
+
+{% block content %}
+<section class="new-task">
+  <h2>Новая задача</h2>
+  <form action="/web/tasks/create" method="post">
+    <input type="text" name="title" placeholder="Что нужно сделать?" required>
+    <textarea name="description" placeholder="Описание (необязательно)"></textarea>
+    <label>
+      Дедлайн:
+      <input type="datetime-local" name="due_at">
+    </label>
+    <button type="submit">Добавить</button>
+  </form>
+</section>
+
+<section class="task-columns">
+  <div class="column">
+    <h2>Новые</h2>
+    {% if tasks_pending %}
+      <ul>
+        {% for task in tasks_pending %}
+          <li>
+            <strong>{{ task.title }}</strong>
+            {% if task.description %}
+              <div class="desc">{{ task.description }}</div>
+            {% endif %}
+            {% if task.due_at %}
+              <div class="meta">Дедлайн: {{ task.due_at }}</div>
+            {% endif %}
+            <form action="/web/tasks/{{ task.id }}/start" method="post" style="display:inline">
+              <button type="submit">Взять в работу</button>
+            </form>
+            <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
+              <button type="submit">Сделано</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>Нет новых задач.</p>
+    {% endif %}
+  </div>
+
+  <div class="column">
+    <h2>В работе</h2>
+    {% if tasks_in_progress %}
+      <ul>
+        {% for task in tasks_in_progress %}
+          <li>
+            <strong>{{ task.title }}</strong>
+            {% if task.description %}
+              <div class="desc">{{ task.description }}</div>
+            {% endif %}
+            {% if task.due_at %}
+              <div class="meta">Дедлайн: {{ task.due_at }}</div>
+            {% endif %}
+            <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
+              <button type="submit">Сделано</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>Нет задач в работе.</p>
+    {% endif %}
+  </div>
+
+  <div class="column">
+    <h2>Готово</h2>
+    {% if tasks_done %}
+      <ul>
+        {% for task in tasks_done %}
+          <li>
+            <strong>{{ task.title }}</strong>
+            {% if task.description %}
+              <div class="desc">{{ task.description }}</div>
+            {% endif %}
+            {% if task.due_at %}
+              <div class="meta">Дедлайн: {{ task.due_at }}</div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>Готовых задач пока нет.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
