@@ -79,7 +79,7 @@ async def task_in_progress(
 
 
 @router.post("/web/tasks/{task_id}/done", include_in_schema=False)
-async def task_in_progress(
+async def task_done(
     task_id: int,
     db: AsyncSession = Depends(get_db)
 ):
@@ -91,3 +91,22 @@ async def task_in_progress(
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)
 
+
+@router.post("/web/tasks/{task_id}/delete", include_in_schema=False)
+async def task_done_delete(
+        task_id: int,
+        db: AsyncSession = Depends(get_db)
+):
+    task = await db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # if task.status != TaskStatus.done:
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail="Only done tasks can be deleted",
+    #     )
+
+    await db.delete(task)
+    await db.commit()
+    return RedirectResponse(url="/web/tasks", status_code=303)

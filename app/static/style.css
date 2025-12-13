@@ -85,3 +85,44 @@ button:hover {
 .column button {
   margin-right: .5rem;
 }
+
+
+.task-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.column ul {
+  list-style: none;
+  padding: 0;
+}
+
+.column li,
+.task-card {
+  position: relative;
+  background: #ffffff;
+  border-radius: .75rem;
+  padding: .75rem 1rem;
+  margin-bottom: .75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+.delete-form {
+  position: absolute;
+  top: .4rem;
+  right: .4rem;
+}
+
+.delete-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #9ca3af;
+  padding: 0;
+}
+
+.delete-btn:hover {
+  color: #ef4444;
+}
