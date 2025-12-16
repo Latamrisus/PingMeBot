@@ -154,6 +154,11 @@ button:hover {
   font-weight: 500;
 }
 
+.meta.reminder {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
 /* страница редактирования */
 .edit-form {
   display: flex;

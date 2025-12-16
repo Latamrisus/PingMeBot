@@ -30,9 +30,15 @@ async def tasks_page(
 
     now = datetime.utcnow()
 
-    tasks_pending = [t for t in tasks if t.status == TaskStatus.pending]
-    tasks_in_progress = [t for t in tasks if t.status == TaskStatus.in_progress]
-    tasks_done = [t for t in tasks if t.status == TaskStatus.done]
+    def sort_key(task: Task):
+        return (
+            task.due_at is None,
+            task.due_at or task.created_at
+        )
+
+    tasks_pending = sorted([t for t in tasks if t.status == TaskStatus.pending], key=sort_key)
+    tasks_in_progress = sorted([t for t in tasks if t.status == TaskStatus.in_progress], key=sort_key)
+    tasks_done = sorted([t for t in tasks if t.status == TaskStatus.done], key=sort_key)
 
     return templates.TemplateResponse(
         "tasks.html",
@@ -52,6 +58,7 @@ async def create_task_page(
         title: str = Form(...),
         description: str = Form(""),
         due_at: str | None = Form(None),
+        remind_at: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
     due_at_dt = None
@@ -61,7 +68,17 @@ async def create_task_page(
         except ValueError:
             due_at_dt = None
 
-    task = Task(title=title, description=description, due_at=due_at_dt)
+    remind_at_dt = None
+    if remind_at:
+        try:
+            remind_at_dt = datetime.fromisoformat(remind_at)
+        except ValueError:
+            remind_at_dt = None
+
+    if remind_at_dt and due_at_dt and remind_at_dt > due_at_dt:
+        remind_at_dt = due_at_dt
+
+    task = Task(title=title, description=description, due_at=due_at_dt, remind_at=remind_at_dt)
     db.add(task)
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)
@@ -138,6 +155,7 @@ async def update_task_page(
         title: str = Form(...),
         description: str = Form(""),
         due_at: str | None = Form(None),
+        remind_at: str | None = Form(None),
         status: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
@@ -155,6 +173,17 @@ async def update_task_page(
             task.due_at = None
     else:
         task.due_at = None
+
+    if remind_at:
+        try:
+            task.remind_at = datetime.fromisoformat(remind_at)
+        except ValueError:
+            task.remind_at = None
+    else:
+        task.remind_at = None
+
+    if task.remind_at and task.due_at and task.remind_at > task.due_at:
+        task.remind_at = task.due_at
 
     if status:
         try:

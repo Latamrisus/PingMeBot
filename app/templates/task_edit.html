@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Редактировать задачу — PingMeBot{% endblock %}
+
+{% block content %}
+<h2>Редактировать задачу</h2>
+
+<form action="/web/tasks/{{ task.id }}/edit" method="post" class="edit-form">
+    <label>
+        Заголовок:
+        <input type="text" name="title" value="{{ task.title }}" required>
+    </label>
+
+    <label>
+        Описание:
+        <textarea name="description">{{ task.description or "" }}</textarea>
+    </label>
+
+    <label>
+        Дедлайн:
+        <input
+                type="datetime-local"
+                name="due_at"
+                value="{% if task.due_at %}{{ task.due_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+        >
+    </label>
+
+    <label>
+        Напомнить в:
+        <input
+                type="datetime-local"
+                name="remind_at"
+                value="{% if task.remind_at %}{{ task.remind_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+        >
+    </label>
+
+    <label>
+        Статус:
+        <select name="status">
+            <option value="pending"
+                    {% if task.status==
+            'pending' or task.status.value == 'pending' %}selected{% endif %}>
+            Новая
+            </option>
+            <option value="in_progress"
+                    {% if task.status==
+            'in_progress' or task.status.value == 'in_progress' %}selected{% endif %}>
+            В работе
+            </option>
+            <option value="done"
+                    {% if task.status==
+            'done' or task.status.value == 'done' %}selected{% endif %}>
+            Готово
+            </option>
+        </select>
+    </label>
+
+    <div class="edit-actions">
+        <button type="submit">Сохранить</button>
+        <a href="/web/tasks">Отмена</a>
+    </div>
+</form>
+{% endblock %}

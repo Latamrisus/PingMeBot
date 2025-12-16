@@ -11,6 +11,12 @@
             Дедлайн:
             <input type="datetime-local" name="due_at">
         </label>
+
+        <label>
+            Напомнить в:
+            <input type="datetime-local" name="remind_at">
+        </label>
+
         <button type="submit">Добавить</button>
     </form>
 </section>
@@ -46,6 +52,12 @@
                 {% if task.due_at %}
                 <div class="meta {% if task.due_at < now %}overdue{% endif %}">
                     Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                </div>
+                {% endif %}
+
+                {% if task.remind_at %}
+                <div class="meta reminder">
+                    🔔 Напомнить: {{ task.remind_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/start" method="post" style="display:inline">
@@ -93,6 +105,12 @@
                 {% if task.due_at %}
                 <div class="meta {% if task.due_at < now %}overdue{% endif %}">
                     Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                </div>
+                {% endif %}
+
+                {% if task.remind_at %}
+                <div class="meta reminder">
+                    🔔 Напомнить: {{ task.remind_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
