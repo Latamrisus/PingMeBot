@@ -94,14 +94,14 @@
                 <div class="desc">{{ task.description }}</div>
                 {% endif %}
                 {% if task.due_at %}
-                <div class="meta {% if task.due_at < now %}overdue{% endif %}">
+                <div class="meta {% if task.is_overdue %}overdue{% endif %}">
                     Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
 
-                {% if task.remind_at %}
+                {% if task.next_remind_at %}
                 <div class="meta reminder">
-                    🔔 Ближайшее напоминание: {{ task.remind_at.strftime('%d.%m.%Y %H:%M') }}
+                    🔔 Ближайшее напоминание: {{ task.next_remind_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/start" method="post" style="display:inline">
@@ -147,14 +147,14 @@
                 <div class="desc">{{ task.description }}</div>
                 {% endif %}
                 {% if task.due_at %}
-                <div class="meta {% if task.due_at < now %}overdue{% endif %}">
+                <div class="meta {% if task.is_overdue %}overdue{% endif %}">
                     Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
 
-                {% if task.remind_at %}
+                {% if task.next_remind_at %}
                 <div class="meta reminder">
-                    🔔 Напомнить: {{ task.remind_at.strftime('%d.%m.%Y %H:%M') }}
+                    🔔 Ближайшее напоминание: {{ task.next_remind_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
@@ -196,7 +196,7 @@
                 <div class="desc">{{ task.description }}</div>
                 {% endif %}
                 {% if task.due_at %}
-                <div class="meta {% if task.due_at < now %}overdue{% endif %}">
+                <div class="meta {% if task.is_overdue %}overdue{% endif %}">
                     Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}

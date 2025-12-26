@@ -2,12 +2,12 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete, update, func
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.schemas.task import TaskStatus
 from app.db import get_db
-from app.models import Task
+from app.models import Task, TaskReminder
 
 router = APIRouter(tags=["web"])
 
@@ -30,6 +30,24 @@ async def tasks_page(
 
     now = datetime.utcnow()
 
+    for t in tasks:
+        t.is_overdue = bool(t.due_at and t.due_at < now)
+
+    stmt_next = (
+        select(TaskReminder.task_id, func.min(TaskReminder.remind_at))
+        .where(
+            TaskReminder.is_sent.is_(False),
+            TaskReminder.remind_at > now
+        )
+        .group_by(TaskReminder.task_id)
+    )
+
+    res_next = await db.execute(stmt_next)
+    next_by_task = {task_id: next_dt for task_id, next_dt in res_next.all()}
+
+    for t in tasks:
+        t.next_remind_at = next_by_task.get(t.id)
+
     def sort_key(task: Task):
         return (
             task.due_at is None,
@@ -47,7 +65,6 @@ async def tasks_page(
             "tasks_pending": tasks_pending,
             "tasks_in_progress": tasks_in_progress,
             "tasks_done": tasks_done,
-            "now": now
         }
     )
 
@@ -62,7 +79,7 @@ async def create_task_page(
         custom_remind_at: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
-    now = datetime.now()
+    now = datetime.utcnow()
 
     due_at_dt = None
     if due_at:
@@ -71,7 +88,7 @@ async def create_task_page(
         except ValueError:
             due_at_dt = None
 
-    reminder_candidates: list[datetime] = []
+    reminder_candidates: set[datetime] = set()
 
     if due_at_dt:
         for preset in remind_presets:
@@ -86,20 +103,27 @@ async def create_task_page(
                 candidate = due_at_dt - timedelta(hours=1)
 
             if candidate and candidate > now:
-                reminder_candidates.append(candidate)
+                reminder_candidates.add(candidate)
 
     if custom_remind_at:
         try:
             custom_dt = datetime.fromisoformat(custom_remind_at)
             if custom_dt > now:
-                reminder_candidates.append(custom_dt)
+                reminder_candidates.add(custom_dt)
         except ValueError:
             pass
 
-    nearest_reminder = min(reminder_candidates) if reminder_candidates else None
-
-    task = Task(title=title, description=description, due_at=due_at_dt, remind_at=nearest_reminder)
+    task = Task(title=title, description=description, due_at=due_at_dt)
     db.add(task)
+    await db.flush()
+
+    reminders = [
+        TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates)
+    ]
+
+    if reminders:
+        db.add_all(reminders)
+
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)
 
@@ -128,6 +152,13 @@ async def task_done(
         raise HTTPException(status_code=404, detail="Task not found")
 
     task.status = TaskStatus.done
+
+    await db.execute(
+        update(TaskReminder)
+        .where(TaskReminder.task_id == task.id, TaskReminder.is_sent.is_(False))
+        .values(is_sent=True)
+    )
+
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)
 
@@ -175,7 +206,8 @@ async def update_task_page(
         title: str = Form(...),
         description: str = Form(""),
         due_at: str | None = Form(None),
-        remind_at: str | None = Form(None),
+        remind_presets: list[str] = Form([]),
+        custom_remind_at: str | None = Form(None),
         status: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
@@ -185,6 +217,7 @@ async def update_task_page(
 
     task.title = title
     task.description = description or None
+    now = datetime.now()
 
     if due_at:
         try:
@@ -194,22 +227,44 @@ async def update_task_page(
     else:
         task.due_at = None
 
-    if remind_at:
-        try:
-            task.remind_at = datetime.fromisoformat(remind_at)
-        except ValueError:
-            task.remind_at = None
-    else:
-        task.remind_at = None
-
-    if task.remind_at and task.due_at and task.remind_at > task.due_at:
-        task.remind_at = task.due_at
-
     if status:
         try:
             task.status = TaskStatus(status)
         except ValueError:
             pass
+
+    reminder_candidates: set[datetime] = set()
+
+    if task.due_at:
+        for preset in remind_presets:
+            candidate = None
+            if preset == "3d":
+                candidate = task.due_at - timedelta(days=3)
+            elif preset == "1d":
+                candidate = task.due_at - timedelta(days=1)
+            elif preset == "12h":
+                candidate = task.due_at - timedelta(hours=12)
+            elif preset == "1h":
+                candidate = task.due_at - timedelta(hours=1)
+
+            if candidate and candidate > now:
+                reminder_candidates.add(candidate)
+
+    if custom_remind_at:
+        try:
+            custom_dt = datetime.fromisoformat(custom_remind_at)
+            if custom_dt > now:
+                reminder_candidates.add(custom_dt)
+        except ValueError:
+            pass
+
+    await db.execute(delete(TaskReminder).where(TaskReminder.task_id == task.id))
+
+    reminders = [
+        TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates)
+    ]
+    if reminders:
+        db.add_all(reminders)
 
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)

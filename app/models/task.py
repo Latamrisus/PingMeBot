@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import String, Text, Enum, DateTime, Integer
 from app.db import Base
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.schemas.task import TaskStatus
 
@@ -19,7 +19,6 @@ class Task(Base):
     )
 
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
-    remind_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),
@@ -30,4 +29,11 @@ class Task(Base):
         DateTime(timezone=False),
         default=datetime.utcnow,
         nullable=True
+    )
+
+    reminders = relationship(
+        "TaskReminder",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True
     )
