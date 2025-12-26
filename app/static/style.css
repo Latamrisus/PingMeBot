@@ -39,7 +39,7 @@ input[type="text"], textarea {
   border: 1px solid #d1d5db;
 }
 
-button {
+.pretty-buttons {
   align-self: flex-start;
   padding: .5rem 1rem;
   border-radius: .5rem;
@@ -49,7 +49,7 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+.pretty-buttons:hover {
   background: #2563eb;
 }
 

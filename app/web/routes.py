@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,9 +58,12 @@ async def create_task_page(
         title: str = Form(...),
         description: str = Form(""),
         due_at: str | None = Form(None),
-        remind_at: str | None = Form(None),
+        remind_presets: list[str] = Form([]),
+        custom_remind_at: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
+    now = datetime.now()
+
     due_at_dt = None
     if due_at:
         try:
@@ -68,17 +71,34 @@ async def create_task_page(
         except ValueError:
             due_at_dt = None
 
-    remind_at_dt = None
-    if remind_at:
+    reminder_candidates: list[datetime] = []
+
+    if due_at_dt:
+        for preset in remind_presets:
+            candidate: datetime | None = None
+            if preset == "3d":
+                candidate = due_at_dt - timedelta(days=3)
+            elif preset == "1d":
+                candidate = due_at_dt - timedelta(days=1)
+            elif preset == "12h":
+                candidate = due_at_dt - timedelta(hours=12)
+            elif preset == "1h":
+                candidate = due_at_dt - timedelta(hours=1)
+
+            if candidate and candidate > now:
+                reminder_candidates.append(candidate)
+
+    if custom_remind_at:
         try:
-            remind_at_dt = datetime.fromisoformat(remind_at)
+            custom_dt = datetime.fromisoformat(custom_remind_at)
+            if custom_dt > now:
+                reminder_candidates.append(custom_dt)
         except ValueError:
-            remind_at_dt = None
+            pass
 
-    if remind_at_dt and due_at_dt and remind_at_dt > due_at_dt:
-        remind_at_dt = due_at_dt
+    nearest_reminder = min(reminder_candidates) if reminder_candidates else None
 
-    task = Task(title=title, description=description, due_at=due_at_dt, remind_at=remind_at_dt)
+    task = Task(title=title, description=description, due_at=due_at_dt, remind_at=nearest_reminder)
     db.add(task)
     await db.commit()
     return RedirectResponse(url="/web/tasks", status_code=303)

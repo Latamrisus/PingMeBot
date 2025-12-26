@@ -4,22 +4,66 @@
 {% block content %}
 <section class="new-task">
     <h2>Новая задача</h2>
-    <form action="/web/tasks/create" method="post">
-        <input type="text" name="title" placeholder="Что нужно сделать?" required>
-        <textarea name="description" placeholder="Описание (необязательно)"></textarea>
-        <label>
-            Дедлайн:
-            <input type="datetime-local" name="due_at">
-        </label>
+    <form action="/web/tasks/create" method="post" id="new-task-form">
+        <div id="title-field">
+            <input type="text" name="title" placeholder="Что нужно сделать?" required>
+        </div>
 
-        <label>
-            Напомнить в:
-            <input type="datetime-local" name="remind_at">
-        </label>
+        <div id="description-field">
+            <textarea name="description" placeholder="Описание (необязательно)"></textarea>
+        </div>
 
-        <button type="submit">Добавить</button>
+        <div id="deadline-field">
+            <label>
+                Дедлайн:
+                <input type="datetime-local" name="due_at" id="due-at-input">
+            </label>
+        </div>
+
+        <div id="reminders-field">
+            <p>Напомнить:</p>
+            <label>
+                <input type="checkbox" name="remind_presets" value="3d" class="preset-checkbox">
+                за 3 дня
+            </label>
+            <label>
+                <input type="checkbox" name="remind_presets" value="1d" class="preset-checkbox">
+                за день
+            </label>
+            <label>
+                <input type="checkbox" name="remind_presets" value="12h" class="preset-checkbox">
+                за 12 часов
+            </label>
+            <label>
+                <input type="checkbox" name="remind_presets" value="1h" class="preset-checkbox">
+                за час
+            </label>
+
+            <label>
+                Свое время:
+                <input type="datetime-local" name="custom_remind_at" id="custom-remind-input">
+            </label>
+        </div>
+
+        <div class="toggles">
+            <label>
+                <input type="checkbox" id="no-description-toggle">
+                Нет описания
+            </label>
+            <label>
+                <input type="checkbox" id="no-deadline-toggle">
+                Нет дедлайна
+            </label>
+            <label>
+                <input type="checkbox" id="no-reminders-toggle">
+                Не напоминать
+            </label>
+        </div>
+
+        <button type="submit" class="pretty-buttons">Добавить</button>
     </form>
 </section>
+
 
 <section class="task-columns">
     <div class="column">
@@ -57,14 +101,14 @@
 
                 {% if task.remind_at %}
                 <div class="meta reminder">
-                    🔔 Напомнить: {{ task.remind_at.strftime('%d.%m.%Y %H:%M') }}
+                    🔔 Ближайшее напоминание: {{ task.remind_at.strftime('%d.%m.%Y %H:%M') }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/start" method="post" style="display:inline">
-                    <button type="submit">Взять в работу</button>
+                    <button class="pretty-buttons" type="submit">Взять в работу</button>
                 </form>
                 <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
-                    <button type="submit">Сделано</button>
+                    <button class="pretty-buttons" type="submit">Сделано</button>
                 </form>
             </li>
             {% endfor %}
@@ -114,7 +158,7 @@
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
-                    <button type="submit">Сделано</button>
+                    <button class="pretty-buttons" type="submit">Сделано</button>
                 </form>
             </li>
             {% endfor %}
@@ -164,4 +208,69 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const descToggle = document.getElementById("no-description-toggle");
+        const descField = document.getElementById("description-field");
+        const descTextarea = descField?.querySelector("textarea[name='description']");
+
+        const deadlineToggle = document.getElementById("no-deadline-toggle");
+        const deadlineField = document.getElementById("deadline-field");
+        const dueInput = document.getElementById("due-at-input");
+
+        const remindersToggle = document.getElementById("no-reminders-toggle");
+        const remindersField = document.getElementById("reminders-field");
+        const presetCheckboxes = document.querySelectorAll(".preset-checkbox");
+        const customRemindInput = document.getElementById("custom-remind-input");
+
+
+        if (descToggle && descField && descTextarea) {
+            descToggle.addEventListener("change", () => {
+                if (descToggle.checked) {
+                    descField.style.display = "none";
+                    descTextarea.value = "";
+                } else {
+                    descField.style.display = "";
+                }
+            });
+        }
+
+        if (deadlineToggle && deadlineField && dueInput) {
+            const updateDeadlineState = () => {
+                if (deadlineToggle.checked) {
+                    deadlineField.style.display = "none";
+                    dueInput.value = "";
+                } else {
+                    deadlineField.style.display = "";
+                }
+                // пресеты зависят от дедлайна: если нет дедлайна — отключаем пресеты
+                const hasDeadline = !deadlineToggle.checked && !!dueInput.value;
+                presetCheckboxes.forEach(cb => {
+                    cb.disabled = !hasDeadline;
+                    if (!hasDeadline) cb.checked = false;
+                });
+            };
+
+            deadlineToggle.addEventListener("change", updateDeadlineState);
+            dueInput.addEventListener("input", updateDeadlineState);
+            updateDeadlineState();
+        }
+
+
+        if (remindersToggle && remindersField) {
+            remindersToggle.addEventListener("change", () => {
+                if (remindersToggle.checked) {
+                    remindersField.style.display = "none";
+                    presetCheckboxes.forEach(cb => cb.checked = false);
+                    if (customRemindInput) customRemindInput.value = "";
+                } else {
+                    remindersField.style.display = "";
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}
