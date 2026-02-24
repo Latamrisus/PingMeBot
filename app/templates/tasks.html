@@ -95,13 +95,13 @@
                 {% endif %}
                 {% if task.due_at %}
                 <div class="meta {% if task.is_overdue %}overdue{% endif %}">
-                    Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                    Дедлайн: {{ task.due_at_display }}
                 </div>
                 {% endif %}
 
                 {% if task.next_remind_at %}
                 <div class="meta reminder">
-                    🔔 Ближайшее напоминание: {{ task.next_remind_at.strftime('%d.%m.%Y %H:%M') }}
+                    🔔 Ближайшее напоминание: {{ task.next_remind_at_display }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/start" method="post" style="display:inline">
@@ -148,13 +148,13 @@
                 {% endif %}
                 {% if task.due_at %}
                 <div class="meta {% if task.is_overdue %}overdue{% endif %}">
-                    Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                    Дедлайн: {{ task.due_at_display }}
                 </div>
                 {% endif %}
 
                 {% if task.next_remind_at %}
                 <div class="meta reminder">
-                    🔔 Ближайшее напоминание: {{ task.next_remind_at.strftime('%d.%m.%Y %H:%M') }}
+                    🔔 Ближайшее напоминание: {{ task.next_remind_at_display }}
                 </div>
                 {% endif %}
                 <form action="/web/tasks/{{ task.id }}/done" method="post" style="display:inline">
@@ -197,7 +197,7 @@
                 {% endif %}
                 {% if task.due_at %}
                 <div class="meta {% if task.is_overdue %}overdue{% endif %}">
-                    Дедлайн: {{ task.due_at.strftime('%d.%m.%Y %H:%M') }}
+                    Дедлайн: {{ task.due_at_display }}
                 </div>
                 {% endif %}
             </li>

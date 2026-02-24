@@ -23,6 +23,8 @@ class Settings(BaseSettings):
 
     TELEGRAM_BOT_TOKEN: str | None = None
 
+    APP_TZ: str = "Europe/Moscow"
+
     @property
     def DATABASE_URL(self) -> str:
         return (

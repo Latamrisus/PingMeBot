@@ -1,13 +1,17 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update, func
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+
+from app.config import settings
 from app.schemas.task import TaskStatus
 from app.db import get_db
 from app.models import Task, TaskReminder
+from app.celery_app import celery_app
+from app.utils.dt import app_tz, parse_dt_local_to_utc, fmt_local, utc_to_local, fmt_dtlocal_value
 
 router = APIRouter(tags=["web"])
 
@@ -28,16 +32,13 @@ async def tasks_page(
     result = await db.execute(stmt)
     tasks = result.scalars().all()
 
-    now = datetime.utcnow()
-
-    for t in tasks:
-        t.is_overdue = bool(t.due_at and t.due_at < now)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
     stmt_next = (
         select(TaskReminder.task_id, func.min(TaskReminder.remind_at))
         .where(
             TaskReminder.is_sent.is_(False),
-            TaskReminder.remind_at > now
+            TaskReminder.remind_at > now_utc
         )
         .group_by(TaskReminder.task_id)
     )
@@ -47,6 +48,9 @@ async def tasks_page(
 
     for t in tasks:
         t.next_remind_at = next_by_task.get(t.id)
+        t.is_overdue = bool(t.due_at and t.due_at < now_utc)
+        t.due_at_display = fmt_local(t.due_at, settings.APP_TZ, "%d.%m.%Y %H:%M")
+        t.next_remind_at_display = fmt_local(getattr(t, "next_remind_at", None), settings.APP_TZ, "%d.%m.%Y %H:%M")
 
     def sort_key(task: Task):
         return (
@@ -79,52 +83,62 @@ async def create_task_page(
         custom_remind_at: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
-    now = datetime.utcnow()
+    tz = app_tz(settings.APP_TZ)
+    now_local = datetime.now(tz)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    due_at_dt = None
+    due_at_utc = parse_dt_local_to_utc(due_at, settings.APP_TZ)
+    due_at_local = None
+
+    due_at_local = None
     if due_at:
-        try:
-            due_at_dt = datetime.fromisoformat(due_at)
-        except ValueError:
-            due_at_dt = None
+        due_at_local = datetime.fromisoformat(due_at).replace(tzinfo=tz)
 
-    reminder_candidates: set[datetime] = set()
+    reminder_candidates_utc: set[datetime] = set()
 
-    if due_at_dt:
+    if due_at_local:
         for preset in remind_presets:
             candidate: datetime | None = None
             if preset == "3d":
-                candidate = due_at_dt - timedelta(days=3)
+                candidate = due_at_local - timedelta(days=3)
             elif preset == "1d":
-                candidate = due_at_dt - timedelta(days=1)
+                candidate = due_at_local - timedelta(days=1)
             elif preset == "12h":
-                candidate = due_at_dt - timedelta(hours=12)
+                candidate = due_at_local - timedelta(hours=12)
             elif preset == "1h":
-                candidate = due_at_dt - timedelta(hours=1)
+                candidate = due_at_local - timedelta(hours=1)
 
-            if candidate and candidate > now:
-                reminder_candidates.add(candidate)
+            if candidate and candidate > now_local:
+                candidate_utc = candidate.astimezone(timezone.utc).replace(tzinfo=None)
+                if candidate_utc > now_utc:
+                    reminder_candidates_utc.add(candidate_utc)
 
-    if custom_remind_at:
-        try:
-            custom_dt = datetime.fromisoformat(custom_remind_at)
-            if custom_dt > now:
-                reminder_candidates.add(custom_dt)
-        except ValueError:
-            pass
+    custom_utc = parse_dt_local_to_utc(custom_remind_at, settings.APP_TZ)
+    if custom_utc and custom_utc > now_utc:
+        reminder_candidates_utc.add(custom_utc)
 
-    task = Task(title=title, description=description, due_at=due_at_dt)
+    task = Task(title=title, description=description, due_at=due_at_utc)
     db.add(task)
     await db.flush()
 
     reminders = [
-        TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates)
+        TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates_utc)
     ]
 
     if reminders:
         db.add_all(reminders)
+        await db.flush()
 
     await db.commit()
+
+    if reminders:
+        for r in reminders:
+            eta_utc = r.remind_at.replace(tzinfo=timezone.utc)
+            celery_app.send_task(
+                "pingmebot.send_reminder",
+                args=[r.id],
+                eta=eta_utc,
+            )
     return RedirectResponse(url="/web/tasks", status_code=303)
 
 
@@ -193,9 +207,26 @@ async def edit_task_page(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    res = await db.execute(
+        select(func.min(TaskReminder.remind_at))
+        .where(
+            TaskReminder.task_id == task.id,
+            TaskReminder.is_sent.is_(False),
+            TaskReminder.remind_at > now_utc,
+        )
+    )
+    nearest_remind_at = res.scalar_one_or_none()
+
     return templates.TemplateResponse(
         "task_edit.html",
-        {"request": request, "task": task},
+        {
+            "request": request,
+            "task": task,
+            "due_at_value": fmt_dtlocal_value(task.due_at),
+            "custom_value": fmt_dtlocal_value(nearest_remind_at),
+        },
     )
 
 
@@ -217,15 +248,9 @@ async def update_task_page(
 
     task.title = title
     task.description = description or None
-    now = datetime.now()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    if due_at:
-        try:
-            task.due_at = datetime.fromisoformat(due_at)
-        except ValueError:
-            task.due_at = None
-    else:
-        task.due_at = None
+    task.due_at = parse_dt_local_to_utc(due_at, settings.APP_TZ)
 
     if status:
         try:
@@ -250,21 +275,27 @@ async def update_task_page(
             if candidate and candidate > now:
                 reminder_candidates.add(candidate)
 
-    if custom_remind_at:
-        try:
-            custom_dt = datetime.fromisoformat(custom_remind_at)
-            if custom_dt > now:
-                reminder_candidates.add(custom_dt)
-        except ValueError:
-            pass
+    custom_dt = parse_dt_local_to_utc(custom_remind_at, settings.APP_TZ)
+    if custom_dt and custom_dt > now:
+        reminder_candidates.add(custom_dt)
 
     await db.execute(delete(TaskReminder).where(TaskReminder.task_id == task.id))
 
-    reminders = [
-        TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates)
-    ]
+    reminders = [TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates)]
+
     if reminders:
         db.add_all(reminders)
+        await db.flush()
 
     await db.commit()
+
+    if reminders and task.status != TaskStatus.done:
+        for r in reminders:
+            eta_utc = r.remind_at.replace(tzinfo=timezone.utc)
+            celery_app.send_task(
+                "pingmebot.send_reminder",
+                args=[r.id],
+                eta=eta_utc,
+            )
+
     return RedirectResponse(url="/web/tasks", status_code=303)
