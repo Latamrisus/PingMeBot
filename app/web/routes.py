@@ -238,7 +238,7 @@ async def update_task_page(
         description: str = Form(""),
         due_at: str | None = Form(None),
         remind_presets: list[str] = Form([]),
-        custom_remind_at: str | None = Form(None),
+        remind_at: str | None = Form(None),
         status: str | None = Form(None),
         db: AsyncSession = Depends(get_db)
 ):
@@ -248,7 +248,8 @@ async def update_task_page(
 
     task.title = title
     task.description = description or None
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
     task.due_at = parse_dt_local_to_utc(due_at, settings.APP_TZ)
 
@@ -272,25 +273,67 @@ async def update_task_page(
             elif preset == "1h":
                 candidate = task.due_at - timedelta(hours=1)
 
-            if candidate and candidate > now:
+            if candidate and candidate > now_utc:
                 reminder_candidates.add(candidate)
 
-    custom_dt = parse_dt_local_to_utc(custom_remind_at, settings.APP_TZ)
-    if custom_dt and custom_dt > now:
+    custom_dt = parse_dt_local_to_utc(remind_at, settings.APP_TZ)
+    if custom_dt and custom_dt > now_utc:
         reminder_candidates.add(custom_dt)
 
-    await db.execute(delete(TaskReminder).where(TaskReminder.task_id == task.id))
+    def norm(dt: datetime) -> datetime:
+        return dt.replace(second=0, microsecond=0)
 
-    reminders = [TaskReminder(task_id=task.id, remind_at=dt) for dt in sorted(reminder_candidates)]
+    candidates_n = {norm(dt) for dt in reminder_candidates}
 
-    if reminders:
-        db.add_all(reminders)
+    res_existing = await db.execute(
+        select(TaskReminder.id, TaskReminder.remind_at, TaskReminder.is_sent)
+        .where(TaskReminder.task_id == task.id)
+    )
+    rows = res_existing.all()
+
+    existing_times: set[datetime] = set()
+    to_disable_ids: list[int] = []
+
+    for rid, rdt, is_sent in rows:
+        rdt_n = norm(rdt)
+        existing_times.add(rdt_n)
+
+        if is_sent:
+            continue
+
+        invalid = (rdt_n <= now_utc) or (task.due_at is not None and rdt_n > task.due_at)
+        if invalid:
+            to_disable_ids.append(rid)
+
+    if to_disable_ids:
+        await db.execute(
+            update(TaskReminder)
+            .where(TaskReminder.id.in_(to_disable_ids))
+            .values(is_sent=True)
+        )
+
+    to_add_times = sorted(candidates_n - existing_times)
+
+    print(to_add_times)
+
+    new_reminders: list[TaskReminder] = []
+    for dt in to_add_times:
+        if dt <= now_utc:
+            continue
+        if task.due_at is not None and dt > task.due_at:
+            continue
+        new_reminders.append(TaskReminder(task_id=task.id, remind_at=dt))
+
+    if new_reminders:
+        db.add_all(new_reminders)
         await db.flush()
+
+    print(new_reminders)
 
     await db.commit()
 
-    if reminders and task.status != TaskStatus.done:
-        for r in reminders:
+    if new_reminders and task.status != TaskStatus.done:
+        for r in new_reminders:
             eta_utc = r.remind_at.replace(tzinfo=timezone.utc)
             celery_app.send_task(
                 "pingmebot.send_reminder",
