@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update, func
+from sqlalchemy import select, update, func
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -11,7 +11,7 @@ from app.schemas.task import TaskStatus
 from app.db import get_db
 from app.models import Task, TaskReminder
 from app.celery_app import celery_app
-from app.utils.dt import app_tz, parse_dt_local_to_utc, fmt_local, utc_to_local, fmt_dtlocal_value
+from app.utils.dt import app_tz, parse_dt_local_to_utc, fmt_local, fmt_dtlocal_value
 
 router = APIRouter(tags=["web"])
 
@@ -314,8 +314,6 @@ async def update_task_page(
 
     to_add_times = sorted(candidates_n - existing_times)
 
-    print(to_add_times)
-
     new_reminders: list[TaskReminder] = []
     for dt in to_add_times:
         if dt <= now_utc:
@@ -327,8 +325,6 @@ async def update_task_page(
     if new_reminders:
         db.add_all(new_reminders)
         await db.flush()
-
-    print(new_reminders)
 
     await db.commit()
 

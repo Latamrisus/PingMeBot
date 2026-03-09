@@ -15,32 +15,31 @@ router = APIRouter(
 )
 
 
+def _to_utc_naive(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 @router.post("/", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
 async def create_task(
         payload: TaskCreate,
         db: AsyncSession = Depends(get_db)
 ):
-    now = datetime.now(timezone.utc)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    due_at = _to_utc_naive(payload.due_at)
 
-    if payload.due_at and payload.due_at < now:
+    if due_at and due_at < now_utc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="due_at must be in the future"
         )
 
-    if payload.remind_at and payload.remind_at < now:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="remind_at must be in the future"
-        )
-
-    if payload.due_at and payload.remind_at and payload.remind_at > payload.due_at:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="remind_at must be <= due_at"
-        )
-
-    task = Task(**payload.model_dump())
+    payload_data = payload.model_dump()
+    payload_data["due_at"] = due_at
+    task = Task(**payload_data)
     db.add(task)
     try:
         await db.commit()
@@ -84,27 +83,17 @@ async def update_task(task_id: int, payload: TaskUpdate, db: AsyncSession = Depe
 
     data = payload.model_dump(exclude_unset=True)
 
-    now = datetime.now(timezone.utc)
-    due_at = data.get("due_at", task.due_at)
-    remind_at = data.get("remind_at", task.remind_at)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    due_at = _to_utc_naive(data.get("due_at", task.due_at))
 
-    if due_at and due_at < now:
+    if due_at and due_at < now_utc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="due_at must be in the future",
         )
 
-    if remind_at and remind_at < now:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="remind_at must be in the future",
-        )
-
-    if remind_at and due_at and remind_at > due_at:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="remind_at must be <= due_at",
-        )
+    if "due_at" in data:
+        data["due_at"] = _to_utc_naive(data["due_at"])
 
     for field, value in data.items():
         setattr(task, field, value)

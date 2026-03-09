@@ -12,7 +12,11 @@ def parse_dt_local_to_utc(value: str | None, tz_name: str) -> datetime | None:
     if not value:
         return None
 
-    local_naive = datetime.fromisoformat(value)
+    try:
+        local_naive = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
     local_aware = local_naive.replace(tzinfo=app_tz(tz_name))
     utc_aware = local_aware.astimezone(timezone.utc)
     return utc_aware.replace(tzinfo=None)

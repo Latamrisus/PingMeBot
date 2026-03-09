@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     REDIS_URL: str
 
     TELEGRAM_BOT_TOKEN: str | None = None
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4.1-mini"
+    OPENAI_API_BASE: str = "https://api.openai.com/v1"
+    OPENAI_TIMEOUT_SECONDS: float = 20.0
 
     APP_TZ: str = "Europe/Moscow"
 

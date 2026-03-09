@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Text, Enum, DateTime, Integer
+from sqlalchemy import String, Text, Enum, DateTime, Integer, BigInteger
 from app.db import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    telegram_user_id: Mapped[int | None] = mapped_column(BigInteger, index=True, nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     status: Mapped[TaskStatus] = mapped_column(
